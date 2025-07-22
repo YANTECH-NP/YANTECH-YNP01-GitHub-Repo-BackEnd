@@ -42,7 +42,7 @@ yantech_localstack_services/
 ### 1. Clone the repo
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/YANTECH-NP/YANTECH-YNP01-GitHub-Repo-BackEnd.git
 cd yantech_localstack_services
 ```
 
