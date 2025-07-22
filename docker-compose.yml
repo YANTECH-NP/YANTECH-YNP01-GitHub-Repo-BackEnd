@@ -1,0 +1,61 @@
+version: "3.8"
+
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=sqs,sns,ses,dynamodb
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_REGION=us-east-1
+    volumes:
+      - ./localstack/init:/etc/localstack/init/ready.d
+      - localstack_data:/tmp/localstack
+    networks:
+      - yantech
+
+  admin:
+    build: ./admin
+    container_name: yantech-admin
+    ports:
+      - "5001:5001"
+    depends_on:
+      - localstack
+    env_file:
+      - ./admin/.env.example
+    networks:
+      - yantech
+
+  requestor:
+    build: ./requestor
+    container_name: yantech-requestor
+    ports:
+      - "5000:5000"
+    depends_on:
+      - localstack
+    env_file:
+      - ./requestor/.env.example
+    networks:
+      - yantech
+
+  worker:
+    build: ./worker
+    container_name: yantech-worker
+    depends_on:
+      - localstack
+    env_file:
+      - ./worker/.env.example
+    networks:
+      - yantech
+
+volumes:
+  localstack_data:
+
+networks:
+  yantech:
+    driver: bridge
