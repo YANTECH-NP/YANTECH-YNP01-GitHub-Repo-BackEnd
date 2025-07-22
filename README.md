@@ -2,6 +2,29 @@
 
 This project runs the complete Yantech notification platform locally using Docker and LocalStack.
 
+Project Structure
+
+yantech_localstack_services/
+├── admin/
+│   ├── admin.py
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── .env.example
+├── requestor/
+│   ├── app.py
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── .env.example
+├── worker/
+│   ├── worker.py
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── .env.example
+├── docker-compose.yml
+├── README.md
+
+
+
 ## 📁 Services
 
 | Service     | Port  | Description                              |
