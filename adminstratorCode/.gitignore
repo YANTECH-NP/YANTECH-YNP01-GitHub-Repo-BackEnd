@@ -1,5 +1,4 @@
 ENV
 
-AWS_REGION=us-east-1
-APP_TABLE_NAME=AppTable
+
 
