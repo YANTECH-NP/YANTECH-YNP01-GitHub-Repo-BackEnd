@@ -24,7 +24,7 @@ yantech_localstack_services/
 ├── docker-compose.yml
 ├── README.md
 
-
+```
 
 ## 📁 Services
 
