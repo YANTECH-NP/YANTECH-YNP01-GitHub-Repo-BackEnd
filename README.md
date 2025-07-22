@@ -2,8 +2,9 @@
 
 This project runs the complete Yantech notification platform locally using Docker and LocalStack.
 
-Project Structure
+## Project Structure
 
+```bash
 yantech_localstack_services/
 ├── admin/
 │   ├── admin.py
