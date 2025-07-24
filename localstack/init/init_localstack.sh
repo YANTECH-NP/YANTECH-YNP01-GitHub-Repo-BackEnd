@@ -8,7 +8,7 @@ awslocal --endpoint-url=http://localstack:4566 sqs create-queue --queue-name not
 
 # Create DynamoDB Applications table
 awslocal dynamodb create-table \
-  --table-name AppTable\
+  --table-name Application\
   --attribute-definitions AttributeName=Application,AttributeType=S \
   --key-schema AttributeName=Application,KeyType=HASH \
   --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5
@@ -22,7 +22,7 @@ awslocal dynamodb create-table \
 
 # Insert application config into Applications table
 awslocal dynamodb put-item \
-  --table-name AppTable \
+  --table-name Application \
   --item '{
     "ApplicationID": {"S": "App1"},
     "App name": {"S": "CHA - Student Platform"},
