@@ -16,7 +16,7 @@ awslocal dynamodb create-table \
 # Create DynamoDB RequestLogs table
 awslocal dynamodb create-table \
   --table-name RequestLogs \
-  --attribute-definitions AttributeName=Application,AttributeType=S \
+  --attribute-definitions AttributeName=ApplicationID,AttributeType=S \
   --key-schema AttributeName=Application,KeyType=HASH \
   --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5
 
@@ -24,7 +24,7 @@ awslocal dynamodb create-table \
 awslocal dynamodb put-item \
   --table-name Application \
   --item '{
-    "ApplicationID": {"S": "App1"},
+    "ApplicationID": {"S": "App2"},
     "App name": {"S": "CHA - Student Platform"},
     "Email": {"S": "no-reply@cha.com"},
     "Domain": {"S": "cha.com"},
