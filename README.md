@@ -59,7 +59,7 @@ AWS_SECRET_ACCESS_KEY=test
 AWS_REGION=us-east-1
 LOCALSTACK_ENDPOINT=http://localstack:4566
 SQS_QUEUE_URL=http://localstack:4566/000000000000/notification-queue
-APP_TABLE_NAME=AppTable
+APP_TABLE_NAME=Application
 ```
 
 ---

@@ -8,7 +8,7 @@ load_dotenv()
 
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 QUEUE_URL = os.getenv("SQS_QUEUE_URL")
-APP_TABLE = os.getenv("APP_TABLE_NAME", "AppTable")
+APP_TABLE = os.getenv("APP_TABLE_NAME", "Application")
 FROM_ADDRESS = os.getenv("SES_FROM_ADDRESS", "no-reply@yantech.com")
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", 5))
 

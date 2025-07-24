@@ -13,7 +13,7 @@ load_dotenv()
 
 app = Flask(__name__)
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
-APP_TABLE = os.getenv("APP_TABLE_NAME", "AppTable")
+APP_TABLE = os.getenv("APP_TABLE_NAME", "Application")
 
 ses = boto3.client('ses', region_name=AWS_REGION, endpoint_url="http://localstack:4566")
 sns = boto3.client('sns', region_name=AWS_REGION, endpoint_url="http://localstack:4566")
