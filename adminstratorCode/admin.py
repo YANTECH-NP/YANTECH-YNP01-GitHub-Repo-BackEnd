@@ -4,6 +4,11 @@ import os
 from dotenv import load_dotenv
 import logging
 
+logging.basicConfig(
+    level=logging.INFO,  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
 load_dotenv()
 
 app = Flask(__name__)
@@ -38,7 +43,7 @@ def register_app():
 
         sns_resp = sns.create_topic(Name=f"{app_id}-notifications")
         sns_arn = sns_resp['TopicArn']
-        
+
         logging.info(f"SNS Topic ARN: {sns_arn}")
 
         table.put_item(Item={
