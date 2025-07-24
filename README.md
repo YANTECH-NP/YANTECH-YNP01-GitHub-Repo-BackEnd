@@ -115,3 +115,31 @@ docker system prune -af
 ---
 
 © YANTECH Notification Platform
+
+
+
+
+
+
+
+['Application', 'Recipient', 'Subject', 'Message', 'OutputType', 'Date', 'Time', 'Interval']
+
+curl -X POST http://localhost:5001/notify   -H "Content-Type: application/json"   -d '{
+    "Application": "App1",
+    "Recipient": "no-reply@cha.com",
+    "Subject": "test message",
+    "Message": "this is a test",
+    "OutputType": "Email",
+    "Date": "2025-07-10",
+    "Time": "12:00",
+    "Interval": [1]
+  }'
+
+
+
+  curl -X POST http://localhost:5001/app   -H "Content-Type: application/json"   -d '{
+    "App name": "CHA",
+    "ApplicationID": "App1",
+    "Email": "no-reply@cha.com",
+    "Domain": "cha.com"
+  }'

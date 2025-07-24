@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import boto3
 import os
 from dotenv import load_dotenv
+import logging
 
 load_dotenv()
 
@@ -28,11 +29,17 @@ def register_app():
         email = data['Email']
         domain = data['Domain']
 
+        logging.info(f"Registering application: {app_name}, ID: {app_id}, Email: {email}, Domain: {domain}")
+
         ses.verify_domain_identity(Domain=domain)
         ses_arn = f"arn:aws:ses:{AWS_REGION}:000000000000:identity/{domain}"
 
+        logging.info(f"SES Domain ARN: {ses_arn}")  
+
         sns_resp = sns.create_topic(Name=f"{app_id}-notifications")
         sns_arn = sns_resp['TopicArn']
+        
+        logging.info(f"SNS Topic ARN: {sns_arn}")
 
         table.put_item(Item={
             "ApplicationID": app_id,
