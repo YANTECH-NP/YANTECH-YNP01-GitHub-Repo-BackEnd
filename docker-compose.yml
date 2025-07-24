@@ -19,7 +19,7 @@ services:
       - yantech
 
   admin:
-    build: ./admin
+    build: ./adminstratorCode
     container_name: admin
     ports:
       - "5001:5001"
@@ -31,7 +31,7 @@ services:
       - yantech
 
   app:
-    build: ./app
+    build: ./requestorCode
     container_name: requester
     ports:
       - "5000:5000"
@@ -43,7 +43,7 @@ services:
       - yantech
 
   worker:
-    build: ./worker
+    build: ./workerCode
     container_name: worker
     env_file:
       - ./worker/.env.example
