@@ -24,8 +24,8 @@ awslocal dynamodb create-table \
 awslocal dynamodb put-item \
   --table-name AppTable \
   --item '{
-    "Application": {"S": "App1"},
-    "AppName": {"S": "CHA - Student Platform"},
+    "ApplicationID": {"S": "App1"},
+    "App name": {"S": "CHA - Student Platform"},
     "Email": {"S": "no-reply@cha.com"},
     "Domain": {"S": "cha.com"},
     "SES-Domain-ARN": {"S": "arn:aws:ses:us-east-1:000000000000:identity/cha.com"},
