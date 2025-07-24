@@ -2,19 +2,24 @@ version: '3.8'
 
 services:
   localstack:
-    image: localstack/localstack:3.2
+    image: localstack/localstack:latest
     container_name: localstack
     ports:
       - "4566:4566"
+      - "4571:4571"
     environment:
-      - SERVICES=sqs,sns,sts,ses,dynamodb
-      - AWS_DEFAULT_REGION=us-east-1
+      - SERVICES=sqs,ses,sns,dynamodb
       - DEBUG=1
-      - DATA_DIR=/var/lib/localstack
+      - DOCKER_HOST=unix:///var/run/docker.sock
     volumes:
-      - ./localstack/init:/etc/localstack/init/ready.d
-      - localstack_data:/var/lib/localstack
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./localstack/init/init_localstack.sh:/etc/localstack/init/ready.d/init_localstack.sh
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
     networks:
       - yantech
 
@@ -58,3 +63,9 @@ volumes:
 networks:
   yantech:
     driver: bridge
+
+
+
+
+
+    
