@@ -1,64 +1,90 @@
-# 📦 YANTECH Notification Platform (LocalStack Dev Environment)
+# 🛠️ YANTECH Notification Platform: LocalStack Setup on Ubuntu 24.04 LTS
 
-This project runs the complete Yantech notification platform locally using Docker and LocalStack.
+This guide walks you through setting up LocalStack and running the `admin.py`, `app.py`, and `worker.py` services on Ubuntu 24.04 using Docker Compose.
 
-## Project Structure
+---
+
+## ✅ Prerequisites
 
 ```bash
-yantech_localstack_services/
+sudo apt update && sudo apt upgrade -y
+
+# Install Docker
+sudo apt install -y docker.io
+
+# Install Docker Compose plugin
+sudo apt install -y docker-compose-plugin
+
+# Install Python 3 and pip
+sudo apt install -y python3 python3-pip python3-venv
+
+# Allow Docker usage without sudo
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+---
+
+## 📁 Project Structure
+
+```
+.
+├── docker-compose.yml
 ├── admin/
 │   ├── admin.py
-│   ├── Dockerfile
 │   ├── requirements.txt
 │   └── .env.example
-├── requestor/
+├── app/
 │   ├── app.py
-│   ├── Dockerfile
 │   ├── requirements.txt
 │   └── .env.example
 ├── worker/
 │   ├── worker.py
-│   ├── Dockerfile
 │   ├── requirements.txt
 │   └── .env.example
-├── docker-compose.yml
-├── README.md
-
+└── localstack/
+    └── init/
+        └── 01-create-table.sh
 ```
-
-## 📁 Services
-
-| Service     | Port  | Description                              |
-|-------------|-------|------------------------------------------|
-| `admin`     | 5001  | Admin API to register apps + setup SES/SNS |
-| `requestor` | 5000  | Receives /notify POSTs, pushes to SQS     |
-| `worker`    | —     | Polls SQS, looks up app, sends message    |
-| `localstack`| 4566  | Mocks AWS (SQS, SES, SNS, DynamoDB)       |
 
 ---
 
-## 🚀 Getting Started
+## ⚙️ Configuration
 
-### 1. Clone the repo
+Each service (`admin`, `app`, `worker`) should use the `.env.example` for environment variables. Example:
 
-```bash
-git clone https://github.com/YANTECH-NP/YANTECH-YNP01-GitHub-Repo-BackEnd.git
-cd yantech_localstack_services
+```env
+AWS_ACCESS_KEY_ID=test
+AWS_SECRET_ACCESS_KEY=test
+AWS_REGION=us-east-1
+LOCALSTACK_ENDPOINT=http://localstack:4566
+SQS_QUEUE_URL=http://localstack:4566/000000000000/notification-queue
+APP_TABLE_NAME=AppTable
 ```
-
-### 2. Start the stack
-
-```bash
-docker-compose up --build
-```
-
-LocalStack will automatically initialize resources via `/localstack/init/init.sh`.
 
 ---
 
-## 🧪 Testing the API
+## 🚀 Run the Stack
 
-### 1. Register an Application
+```bash
+# Make sure init script is executable
+chmod +x localstack/init/01-create-table.sh
+
+# Build and start all services
+docker compose up --build -d
+```
+
+Check LocalStack health:
+
+```bash
+curl http://localhost:4566/_localstack/health
+```
+
+You should see `"dynamodb": "available"`, `"sqs": "available"`, etc.
+
+---
+
+## 🧪 Test Admin API
 
 ```bash
 curl -X POST http://localhost:5001/app   -H "Content-Type: application/json"   -d '{
@@ -69,53 +95,23 @@ curl -X POST http://localhost:5001/app   -H "Content-Type: application/json"   -
   }'
 ```
 
-### 2. Send a Notification
+---
+
+## 🐛 Troubleshooting
+
+- **LocalStack not starting?** Check Docker logs: `docker compose logs localstack`
+- **DNS issues?** Make sure services are in the same Docker network.
+- **Credential errors?** Use dummy credentials in `.env.example` files.
+
+---
+
+## ✅ Cleanup
 
 ```bash
-curl -X POST http://localhost:5000/notify   -H "Content-Type: application/json"   -d '{
-    "Application": "App1",
-    "Recipient": "test@cha.com",
-    "Subject": "Test",
-    "Message": "Test message body",
-    "OutputType": "Email",
-    "Date": "2025-07-10",
-    "Time": "12:00",
-    "Interval": {
-      "Type": "Days",
-      "Values": [1]
-    }
-  }'
+docker compose down -v
+docker system prune -af
 ```
 
 ---
 
-## ✅ LocalStack Initialization Script
-
-Create `/localstack/init/init.sh` with:
-
-```bash
-#!/bin/bash
-awslocal sqs create-queue --queue-name notification-queue
-awslocal dynamodb create-table \
-  --table-name AppTable \
-  --attribute-definitions AttributeName=ApplicationID,AttributeType=S \
-  --key-schema AttributeName=ApplicationID,KeyType=HASH \
-  --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5
-```
-
-Make sure it's executable:
-```bash
-chmod +x localstack/init/init.sh
-```
-
----
-
-## 🧼 Clean Up
-
-```bash
-docker-compose down -v
-```
-
----
-
-Need help with ECS deployment or GitHub Actions CI/CD? Open an issue or contact the team.
+© YANTECH Notification Platform
