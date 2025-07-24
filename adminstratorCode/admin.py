@@ -46,7 +46,7 @@ def register_app():
 
         logging.info(f"SNS Topic ARN: {sns_arn}")
 
-       logging.info(f"{app_id} {app_name} {email} {domain} {ses_arn} {sns_arn}")
+        logging.info(f"{app_id} {app_name} {email} {domain} {ses_arn} {sns_arn}")
 
         
         table.put_item(Item={
