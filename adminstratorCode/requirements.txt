@@ -1,4 +1,0 @@
-flask
-boto3
-python-dotenv
-gunicorn==21.2.0
