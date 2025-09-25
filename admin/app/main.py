@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, EmailStr
 from fastapi.middleware.cors import CORSMiddleware
-from .aws import setup_app_services
+# Removed AWS services import - admin only handles app registration
 from .db import save_app_record, get_all_apps
 
 app = FastAPI()
@@ -30,9 +30,31 @@ def health_check():
 @app.post("/applications")
 def register_application(app_req: AppRequest):
     try:
-        config = setup_app_services(app_req)
-        save_app_record(config)
-        return {"status": "created", "application": config}
+        # Generate API key for the new application
+        import secrets
+        import string
+        alphabet = string.ascii_letters + string.digits + "_-"
+        api_key = ''.join(secrets.choice(alphabet) for _ in range(32))
+        
+        # Create application record
+        app_record = {
+            "Application": app_req.Application,
+            "App_name": app_req.App_name,
+            "Email": app_req.Email,
+            "Domain": app_req.Domain,
+            "api_key": api_key,
+            "role": "client",
+            "Status": "ACTIVE"
+        }
+        
+        save_app_record(app_record)
+        
+        # Return without exposing the API key
+        return {
+            "status": "created", 
+            "application": app_req.Application,
+            "message": "Application registered successfully"
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
