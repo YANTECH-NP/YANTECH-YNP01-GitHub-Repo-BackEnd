@@ -45,16 +45,19 @@ jobs:
         IMAGE_TAG: ${{ github.sha }}
       run: |
         # Build and push admin
-        docker build -t $ECR_REGISTRY/admin-$ENVIRONMENT:$IMAGE_TAG ./admin
+        docker build -t $ECR_REGISTRY/admin-$ENVIRONMENT:$IMAGE_TAG -t $ECR_REGISTRY/admin-$ENVIRONMENT:latest ./admin
         docker push $ECR_REGISTRY/admin-$ENVIRONMENT:$IMAGE_TAG
+        docker push $ECR_REGISTRY/admin-$ENVIRONMENT:latest
         
         # Build and push requestor (client)
-        docker build -t $ECR_REGISTRY/requestor-$ENVIRONMENT:$IMAGE_TAG ./requestor
+        docker build -t $ECR_REGISTRY/requestor-$ENVIRONMENT:$IMAGE_TAG -t $ECR_REGISTRY/requestor-$ENVIRONMENT:latest ./requestor
         docker push $ECR_REGISTRY/requestor-$ENVIRONMENT:$IMAGE_TAG
+        docker push $ECR_REGISTRY/requestor-$ENVIRONMENT:latest
         
         # Build and push worker
-        docker build -t $ECR_REGISTRY/worker-$ENVIRONMENT:$IMAGE_TAG ./worker
+        docker build -t $ECR_REGISTRY/worker-$ENVIRONMENT:$IMAGE_TAG -t $ECR_REGISTRY/worker-$ENVIRONMENT:latest ./worker
         docker push $ECR_REGISTRY/worker-$ENVIRONMENT:$IMAGE_TAG
+        docker push $ECR_REGISTRY/worker-$ENVIRONMENT:latest
     
     - name: Update ECS services with new images
       env:
