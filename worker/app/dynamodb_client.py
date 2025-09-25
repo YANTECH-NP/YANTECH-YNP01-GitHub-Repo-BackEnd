@@ -14,7 +14,9 @@ def get_application_config(app_id):
 def log_request(application_id, request_data, status, error=None):
     table = dynamodb.Table(config.REQUEST_LOG_TABLE)
     from datetime import datetime
+    import uuid
     table.put_item(Item={
+        "RecordID": str(uuid.uuid4()),
         "Application": application_id,
         "Timestamp": datetime.utcnow().isoformat(),
         "Status": status,
