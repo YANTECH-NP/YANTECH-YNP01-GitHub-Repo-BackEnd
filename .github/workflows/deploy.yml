@@ -1,0 +1,93 @@
+name: Deploy to ECS
+
+on:
+  push:
+    branches: [main, staging, develop]
+
+permissions:
+  id-token: write   # Required for OIDC
+  contents: read    # Required for checkout
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set environment
+      run: |
+        if [[ "${{ github.ref_name }}" == "main" ]]; then
+          echo "ENVIRONMENT=prod" >> $GITHUB_ENV
+        elif [[ "${{ github.ref_name }}" == "staging" ]]; then
+          echo "ENVIRONMENT=staging" >> $GITHUB_ENV
+        else
+          echo "ENVIRONMENT=dev" >> $GITHUB_ENV
+        fi
+    
+    - name: Configure AWS credentials using OIDC
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+        role-session-name: GitHubActions-Deploy
+    
+    - name: Login to ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+    
+    - name: Build and push images
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Build and push admin
+        docker build -t $ECR_REGISTRY/admin-$ENVIRONMENT:$IMAGE_TAG ./admin
+        docker push $ECR_REGISTRY/admin-$ENVIRONMENT:$IMAGE_TAG
+        
+        # Build and push requestor (client)
+        docker build -t $ECR_REGISTRY/requestor-$ENVIRONMENT:$IMAGE_TAG ./requestor
+        docker push $ECR_REGISTRY/requestor-$ENVIRONMENT:$IMAGE_TAG
+        
+        # Build and push worker
+        docker build -t $ECR_REGISTRY/worker-$ENVIRONMENT:$IMAGE_TAG ./worker
+        docker push $ECR_REGISTRY/worker-$ENVIRONMENT:$IMAGE_TAG
+    
+    - name: Update ECS task definitions with new images
+      env:
+        IMAGE_TAG: ${{ github.sha }}
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+      run: |
+        # Update task definitions to use new image tags
+        # This ensures ECS pulls the new images
+        
+        # Get current task definitions
+        ADMIN_TASK_DEF=$(aws ecs describe-task-definition --task-definition YANTECH-admin-$ENVIRONMENT --query 'taskDefinition')
+        CLIENT_TASK_DEF=$(aws ecs describe-task-definition --task-definition YANTECH-client-$ENVIRONMENT --query 'taskDefinition')
+        WORKER_TASK_DEF=$(aws ecs describe-task-definition --task-definition YANTECH-worker-$ENVIRONMENT --query 'taskDefinition')
+        
+        # Update image URIs in task definitions
+        echo $ADMIN_TASK_DEF | jq --arg IMAGE "$ECR_REGISTRY/admin-$ENVIRONMENT:$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)' > admin-task-def.json
+        echo $CLIENT_TASK_DEF | jq --arg IMAGE "$ECR_REGISTRY/requestor-$ENVIRONMENT:$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)' > client-task-def.json
+        echo $WORKER_TASK_DEF | jq --arg IMAGE "$ECR_REGISTRY/worker-$ENVIRONMENT:$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)' > worker-task-def.json
+        
+        # Register new task definitions
+        aws ecs register-task-definition --cli-input-json file://admin-task-def.json
+        aws ecs register-task-definition --cli-input-json file://client-task-def.json
+        aws ecs register-task-definition --cli-input-json file://worker-task-def.json
+    
+    - name: Update ECS services
+      env:
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        # Update services with new task definitions - use actual service names
+        aws ecs update-service --cluster YANTECH-cluster-$ENVIRONMENT --service YANTECH-admin-service-$ENVIRONMENT --force-new-deployment
+        aws ecs update-service --cluster YANTECH-cluster-$ENVIRONMENT --service YANTECH-client-service-$ENVIRONMENT --force-new-deployment
+        aws ecs update-service --cluster YANTECH-cluster-$ENVIRONMENT --service YANTECH-worker-service-$ENVIRONMENT --force-new-deployment
+        
+        # Wait for deployments to complete
+        echo "Waiting for services to stabilize..."
+        aws ecs wait services-stable --cluster YANTECH-cluster-$ENVIRONMENT --services YANTECH-admin-service-$ENVIRONMENT YANTECH-client-service-$ENVIRONMENT YANTECH-worker-service-$ENVIRONMENT

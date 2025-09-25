@@ -1,0 +1,6 @@
+BACKEND-DEPLOYMENT-GUIDE/
+fix-kms-permissions.sh
+deploy-and-test.sh
+LAMBDA-AUTH-DEBUGGING-SUMMARY.md
+test-lambda-auth.sh
+prompts/
