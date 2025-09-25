@@ -56,38 +56,21 @@ jobs:
         docker build -t $ECR_REGISTRY/worker-$ENVIRONMENT:$IMAGE_TAG ./worker
         docker push $ECR_REGISTRY/worker-$ENVIRONMENT:$IMAGE_TAG
     
-    - name: Update ECS task definitions with new images
+    - name: Update ECS services with new images
       env:
         IMAGE_TAG: ${{ github.sha }}
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
       run: |
-        # Update task definitions to use new image tags
-        # This ensures ECS pulls the new images
+        # Force new deployment with updated images
+        # ECS will automatically pull new images when service is updated
         
-        # Get current task definitions
-        ADMIN_TASK_DEF=$(aws ecs describe-task-definition --task-definition YANTECH-admin-$ENVIRONMENT --query 'taskDefinition')
-        CLIENT_TASK_DEF=$(aws ecs describe-task-definition --task-definition YANTECH-client-$ENVIRONMENT --query 'taskDefinition')
-        WORKER_TASK_DEF=$(aws ecs describe-task-definition --task-definition YANTECH-worker-$ENVIRONMENT --query 'taskDefinition')
-        
-        # Update image URIs in task definitions
-        echo $ADMIN_TASK_DEF | jq --arg IMAGE "$ECR_REGISTRY/admin-$ENVIRONMENT:$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)' > admin-task-def.json
-        echo $CLIENT_TASK_DEF | jq --arg IMAGE "$ECR_REGISTRY/requestor-$ENVIRONMENT:$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)' > client-task-def.json
-        echo $WORKER_TASK_DEF | jq --arg IMAGE "$ECR_REGISTRY/worker-$ENVIRONMENT:$IMAGE_TAG" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)' > worker-task-def.json
-        
-        # Register new task definitions
-        aws ecs register-task-definition --cli-input-json file://admin-task-def.json
-        aws ecs register-task-definition --cli-input-json file://client-task-def.json
-        aws ecs register-task-definition --cli-input-json file://worker-task-def.json
-    
-    - name: Update ECS services
-      env:
-        IMAGE_TAG: ${{ github.sha }}
-      run: |
-        # Update services with new task definitions - use actual service names
+        # Update services with force new deployment
         aws ecs update-service --cluster YANTECH-cluster-$ENVIRONMENT --service YANTECH-admin-service-$ENVIRONMENT --force-new-deployment
-        aws ecs update-service --cluster YANTECH-cluster-$ENVIRONMENT --service YANTECH-client-service-$ENVIRONMENT --force-new-deployment
+        aws ecs update-service --cluster YANTECH-cluster-$ENVIRONMENT --service YANTECH-client-service-$ENVIRONMENT --force-new-deployment  
         aws ecs update-service --cluster YANTECH-cluster-$ENVIRONMENT --service YANTECH-worker-service-$ENVIRONMENT --force-new-deployment
-        
+    
+    - name: Wait for deployment completion
+      run: |
         # Wait for deployments to complete
         echo "Waiting for services to stabilize..."
         aws ecs wait services-stable --cluster YANTECH-cluster-$ENVIRONMENT --services YANTECH-admin-service-$ENVIRONMENT YANTECH-client-service-$ENVIRONMENT YANTECH-worker-service-$ENVIRONMENT
