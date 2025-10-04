@@ -18,7 +18,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Set environment
+    - name: Set environment   # Determine environment based on branch
       run: |
         if [[ "${{ github.ref_name }}" == "main" ]]; then
           echo "ENVIRONMENT=prod" >> $GITHUB_ENV
@@ -28,7 +28,7 @@ jobs:
           echo "ENVIRONMENT=dev" >> $GITHUB_ENV
         fi
     
-    - name: Configure AWS credentials using OIDC
+    - name: Configure AWS credentials using OIDC 
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ secrets.AWS_ROLE_ARN }}

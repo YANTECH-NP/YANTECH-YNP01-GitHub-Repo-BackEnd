@@ -127,7 +127,7 @@ response=$(curl -s -w "\n%{http_code}" -X POST "$ADMIN_API_URL/applications" \
     -d "{
         \"Application\": \"$APP_NAME\",
         \"App_name\": \"Test Application $(date +%H:%M)\",
-        \"Email\": \"test@example.com\",
+        \"Email\": \"bemnjichiella@gmail.com\",
         \"Domain\": \"example.com\"
     }")
 
