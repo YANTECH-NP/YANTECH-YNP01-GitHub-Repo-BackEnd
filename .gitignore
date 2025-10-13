@@ -8,3 +8,5 @@ test-email-notifications.sh
 test-push-notifications.sh
 test-sms-notifications.sh
 test-admin-registration.sh
+test-sns-email.sh
+test-sns-sms.sh

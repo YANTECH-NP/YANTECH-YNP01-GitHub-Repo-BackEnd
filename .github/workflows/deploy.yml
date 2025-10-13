@@ -28,7 +28,7 @@ jobs:
           echo "ENVIRONMENT=dev" >> $GITHUB_ENV
         fi
     
-    - name: Configure AWS credentials using OIDC 
+    - name: Configure AWS credentials using OIDC  # Use role from secrets
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
