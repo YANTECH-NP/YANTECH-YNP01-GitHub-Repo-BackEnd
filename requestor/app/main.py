@@ -1,6 +1,6 @@
-# requestor/app/main.py
-
+"""Main FastAPI application for requestor service."""
 from fastapi import FastAPI, HTTPException
+from typing import Dict, Any
 from .models import NotificationRequest
 from .sqs_client import send_message_to_queue
 import logging
@@ -10,12 +10,16 @@ import time
 
 app = FastAPI()
 
-# Global readiness flag
-app_ready = False
+class AppState:
+    """Application state container."""
+    def __init__(self) -> None:
+        self.ready = False
+
+app_state = AppState()
 
 @app.on_event("startup")
-async def startup_event():
-    global app_ready
+async def startup_event() -> None:
+    """Initialize application on startup."""
     # Small delay to ensure full initialization
     time.sleep(5)
     
@@ -26,19 +30,20 @@ async def startup_event():
         if queue_url:
             sqs.get_queue_attributes(QueueUrl=queue_url, AttributeNames=['QueueArn'])
             logging.info("SQS connectivity verified")
-        app_ready = True
+        app_state.ready = True
     except Exception as e:
         logging.error(f"SQS connectivity failed: {e}")
-        app_ready = False
+        app_state.ready = False
 
 @app.get("/health")
-def health_check():
-    if not app_ready:
+def health_check() -> Dict[str, Any]:
+    """Health check endpoint."""
+    if not app_state.ready:
         raise HTTPException(status_code=503, detail="Service not ready")
     return {"status": "ok", "service": "requestor", "ready": True}
 
 @app.post("/notifications")
-def notify(req: NotificationRequest):
+def notify(req: NotificationRequest) -> Dict[str, Any]:
     """Send notification request to SQS queue. JWT validation handled by API Gateway."""
     try:
         response = send_message_to_queue(req.dict())

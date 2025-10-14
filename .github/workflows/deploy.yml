@@ -1,79 +1,201 @@
-name: Deploy to ECS
+name: Deploy Notifications Platform
 
+# Trigger on branch pushes (non-prod) and version tags (prod only)
 on:
   push:
-    branches: [main, staging, develop]
+    branches: [staging, develop]
+    tags: ['v*.*.*']
 
 permissions:
-  id-token: write   # Required for OIDC
-  contents: read    # Required for checkout
+  id-token: write    # Required for OIDC authentication
+  contents: write    # Required for creating GitHub releases
+  actions: read      # Required for workflow access
 
 env:
   AWS_REGION: us-east-1
+  SERVICES: 'admin requestor worker'  # Microservices to deploy
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: ${{ github.ref_type == 'tag' && 'production' || (github.ref_name == 'staging' && 'staging' || 'development') }}  
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch full history for proper tagging
     
-    - name: Set environment   # Determine environment based on branch
+    # Determine deployment context (branch vs tag)
+    - name: Set deployment context
+      id: context
       run: |
-        if [[ "${{ github.ref_name }}" == "main" ]]; then
+        if [[ "${{ github.ref_type }}" == "tag" ]]; then
+          # Tagged release - extract version and set prod environment
+          VERSION=${GITHUB_REF#refs/tags/}
           echo "ENVIRONMENT=prod" >> $GITHUB_ENV
-        elif [[ "${{ github.ref_name }}" == "staging" ]]; then
-          echo "ENVIRONMENT=staging" >> $GITHUB_ENV
+          echo "VERSION_TAG=$VERSION" >> $GITHUB_ENV
+          echo "IS_RELEASE=true" >> $GITHUB_ENV
+          echo "IMAGE_TAG=$VERSION" >> $GITHUB_ENV
+          echo "Deploying release $VERSION to production"
         else
-          echo "ENVIRONMENT=dev" >> $GITHUB_ENV
+          # Branch deployment - use commit SHA and set environment
+          SHORT_SHA=${GITHUB_SHA:0:7}
+          echo "IS_RELEASE=false" >> $GITHUB_ENV
+          echo "IMAGE_TAG=$SHORT_SHA" >> $GITHUB_ENV
+          
+          case "${{ github.ref_name }}" in
+            "staging")
+              echo "ENVIRONMENT=staging" >> $GITHUB_ENV
+              ;;
+            "develop")
+              echo "ENVIRONMENT=dev" >> $GITHUB_ENV
+              ;;
+            *)
+              echo "ENVIRONMENT=dev" >> $GITHUB_ENV
+              ;;
+          esac
+          echo "Deploying branch ${{ github.ref_name }} to $ENVIRONMENT"
         fi
     
-    - name: Configure AWS credentials using OIDC  # Use role from secrets
+    # Configure AWS credentials using OIDC
+    - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
         aws-region: ${{ env.AWS_REGION }}
-        role-session-name: GitHubActions-Deploy
+        role-session-name: GitHubActions-${{ env.ENVIRONMENT }}-Deploy
     
-    - name: Login to ECR
+    # Login to Amazon ECR
+    - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v2
     
-    - name: Build and push images
+    # Build and push Docker images with proper tagging
+    - name: Build and push Docker images
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ github.sha }}
       run: |
-        # Build and push admin
-        docker build -t $ECR_REGISTRY/admin-$ENVIRONMENT:$IMAGE_TAG -t $ECR_REGISTRY/admin-$ENVIRONMENT:latest ./admin
-        docker push $ECR_REGISTRY/admin-$ENVIRONMENT:$IMAGE_TAG
-        docker push $ECR_REGISTRY/admin-$ENVIRONMENT:latest
+        echo "Building images for environment: $ENVIRONMENT"
+        echo "Image tag: $IMAGE_TAG"
         
-        # Build and push requestor (client)
-        docker build -t $ECR_REGISTRY/requestor-$ENVIRONMENT:$IMAGE_TAG -t $ECR_REGISTRY/requestor-$ENVIRONMENT:latest ./requestor
-        docker push $ECR_REGISTRY/requestor-$ENVIRONMENT:$IMAGE_TAG
-        docker push $ECR_REGISTRY/requestor-$ENVIRONMENT:latest
-        
-        # Build and push worker
-        docker build -t $ECR_REGISTRY/worker-$ENVIRONMENT:$IMAGE_TAG -t $ECR_REGISTRY/worker-$ENVIRONMENT:latest ./worker
-        docker push $ECR_REGISTRY/worker-$ENVIRONMENT:$IMAGE_TAG
-        docker push $ECR_REGISTRY/worker-$ENVIRONMENT:latest
+        for SERVICE in $SERVICES; do
+          echo "Building $SERVICE..."
+          
+          if [[ "$IS_RELEASE" == "true" ]]; then
+            # Production release: tag with version and latest
+            docker build -t $ECR_REGISTRY/$SERVICE-prod:$VERSION_TAG \
+                        -t $ECR_REGISTRY/$SERVICE-prod:latest \
+                        ./$SERVICE
+            
+            docker push $ECR_REGISTRY/$SERVICE-prod:$VERSION_TAG
+            docker push $ECR_REGISTRY/$SERVICE-prod:latest
+            
+            echo "✅ Pushed $SERVICE-prod:$VERSION_TAG and $SERVICE-prod:latest"
+          else
+            # Branch deployment: tag with commit SHA and latest
+            docker build -t $ECR_REGISTRY/$SERVICE-$ENVIRONMENT:$IMAGE_TAG \
+                        -t $ECR_REGISTRY/$SERVICE-$ENVIRONMENT:latest \
+                        ./$SERVICE
+            
+            docker push $ECR_REGISTRY/$SERVICE-$ENVIRONMENT:$IMAGE_TAG
+            docker push $ECR_REGISTRY/$SERVICE-$ENVIRONMENT:latest
+            
+            echo "✅ Pushed $SERVICE-$ENVIRONMENT:$IMAGE_TAG and $SERVICE-$ENVIRONMENT:latest"
+          fi
+        done
     
-    - name: Update ECS services with new images
+    # Human approval checkpoint for production
+    - name: Production deployment approval
+      if: env.IS_RELEASE == 'true'
+      run: |
+        echo "🔒 Production deployment requires manual approval"
+        echo "Deploying $VERSION_TAG to production ECS cluster"
+    
+    # Deploy to ECS with service updates
+    - name: Deploy to ECS
+      run: |
+        echo "Deploying to ECS cluster: YANTECH-cluster-$ENVIRONMENT"
+        
+        # Update each microservice
+        for SERVICE in $SERVICES; do
+          SERVICE_NAME="YANTECH-${SERVICE}-service-$ENVIRONMENT"
+          
+          echo "Updating ECS service: $SERVICE_NAME"
+          aws ecs update-service \
+            --cluster YANTECH-cluster-$ENVIRONMENT \
+            --service $SERVICE_NAME \
+            --force-new-deployment \
+            --no-cli-pager
+        done
+    
+    # Wait for ECS services to stabilize
+    - name: Wait for ECS deployment completion
+      run: |
+        echo "Waiting for ECS services to stabilize..."
+        
+        # Build service names array
+        SERVICES_ARRAY=()
+        for SERVICE in $SERVICES; do
+          SERVICES_ARRAY+=("YANTECH-${SERVICE}-service-$ENVIRONMENT")
+        done
+        
+        # Wait for all services to stabilize
+        aws ecs wait services-stable \
+          --cluster YANTECH-cluster-$ENVIRONMENT \
+          --services "${SERVICES_ARRAY[@]}" \
+          --no-cli-pager
+        
+        echo "✅ All services deployed successfully to $ENVIRONMENT"
+    
+    # Create GitHub Release for tagged versions
+    - name: Create GitHub Release
+      if: env.IS_RELEASE == 'true'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ env.VERSION_TAG }}
+        name: Release ${{ env.VERSION_TAG }}
+        body: |
+          ## 🚀 Production Deployment ${{ env.VERSION_TAG }}
+          
+          **Deployed Services:**
+          - Admin Service: `admin-prod:${{ env.VERSION_TAG }}`
+          - Requestor Service: `requestor-prod:${{ env.VERSION_TAG }}`
+          - Worker Service: `worker-prod:${{ env.VERSION_TAG }}`
+          
+          **ECS Cluster:** `YANTECH-cluster-prod`
+          
+          **Deployment Details:**
+          - Commit: ${{ github.sha }}
+          - Deployed at: ${{ github.event.head_commit.timestamp }}
+          - Triggered by: @${{ github.actor }}
+          
+          **Docker Images:**
+          ```
+          ${{ steps.login-ecr.outputs.registry }}/admin-prod:${{ env.VERSION_TAG }}
+          ${{ steps.login-ecr.outputs.registry }}/requestor-prod:${{ env.VERSION_TAG }}
+          ${{ steps.login-ecr.outputs.registry }}/worker-prod:${{ env.VERSION_TAG }}
+          ```
+        draft: false
+        prerelease: false
+        generate_release_notes: true
       env:
-        IMAGE_TAG: ${{ github.sha }}
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-      run: |
-        # Force new deployment with updated images
-        # ECS will automatically pull new images when service is updated
-        
-        # Update services with force new deployment
-        aws ecs update-service --cluster YANTECH-cluster-$ENVIRONMENT --service YANTECH-admin-service-$ENVIRONMENT --force-new-deployment
-        aws ecs update-service --cluster YANTECH-cluster-$ENVIRONMENT --service YANTECH-client-service-$ENVIRONMENT --force-new-deployment  
-        aws ecs update-service --cluster YANTECH-cluster-$ENVIRONMENT --service YANTECH-worker-service-$ENVIRONMENT --force-new-deployment
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
-    - name: Wait for deployment completion
+    # Deployment summary
+    - name: Deployment Summary
       run: |
-        # Wait for deployments to complete
-        echo "Waiting for services to stabilize..."
-        aws ecs wait services-stable --cluster YANTECH-cluster-$ENVIRONMENT --services YANTECH-admin-service-$ENVIRONMENT YANTECH-client-service-$ENVIRONMENT YANTECH-worker-service-$ENVIRONMENT
+        echo "## 📋 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Environment:** $ENVIRONMENT" >> $GITHUB_STEP_SUMMARY
+        echo "**Image Tag:** $IMAGE_TAG" >> $GITHUB_STEP_SUMMARY
+        echo "**Services Deployed:** $SERVICES" >> $GITHUB_STEP_SUMMARY
+        echo "**ECS Cluster:** YANTECH-cluster-$ENVIRONMENT" >> $GITHUB_STEP_SUMMARY
+        
+        if [[ "$IS_RELEASE" == "true" ]]; then
+          echo "**Release:** $VERSION_TAG" >> $GITHUB_STEP_SUMMARY
+          echo "**GitHub Release:** Created automatically" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **Status:** Deployment completed successfully" >> $GITHUB_STEP_SUMMARY

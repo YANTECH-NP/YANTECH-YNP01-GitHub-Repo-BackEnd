@@ -1,10 +1,12 @@
+"""Main worker process for handling SQS messages."""
 import json
 import time
+from typing import Dict, Any, List
 from . import sqs_client, dynamodb_client, notifier, logger
 from .health import health_checker
 
 
-def _process_message(msg):
+def _process_message(msg: Dict[str, Any]) -> bool:
     """Process a single SQS message. Returns True if successful, False otherwise."""
     body = None
     try:
@@ -13,7 +15,7 @@ def _process_message(msg):
         logger.log(f"Processing message for application: {app_id}")
         cfg = dynamodb_client.get_application_config(app_id)
         if not cfg:
-            raise Exception("App config not found")
+            raise ValueError("App config not found")
 
         output = body.get("OutputType")
         if output == "EMAIL":
@@ -23,7 +25,7 @@ def _process_message(msg):
             notifier.send_sns(cfg["SNS-Topic-ARN"], body["Message"])
             logger.log(f"Notification sent via {output} to {body['PhoneNumber'] or body['PushToken']}")
         else:
-            raise Exception("Unsupported OutputType")
+            raise ValueError("Unsupported OutputType")
 
         dynamodb_client.log_request(app_id, body, "delivered")
         logger.log(f"Message processed successfully: {body}")
@@ -39,7 +41,8 @@ def _process_message(msg):
         return False
 
 
-def run_worker():
+def run_worker() -> None:
+    """Main worker loop for processing SQS messages."""
     logger.log("Worker started polling SQS...")
     backoff_delay = 1  # Initial backoff delay in seconds
     max_backoff = 60   # Maximum backoff delay in seconds

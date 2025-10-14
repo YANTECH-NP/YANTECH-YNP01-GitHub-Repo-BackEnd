@@ -1,7 +1,9 @@
+"""Pydantic models for notification requests."""
 from pydantic import BaseModel, Field, validator, root_validator, EmailStr
-from typing import Optional, List
+from typing import Optional, List, Any
 
 class IntervalModel(BaseModel):
+    """Model for notification scheduling intervals."""
     Once: Optional[bool] = False
     Days: Optional[List[int]] = []
     Weeks: Optional[List[int]] = []
@@ -9,30 +11,35 @@ class IntervalModel(BaseModel):
     Years: Optional[List[int]] = []
 
     @validator("Days", each_item=True)
-    def validate_day(cls, v):
+    def validate_day(cls, v: int) -> int:
+        """Validate day values."""
         if not 1 <= v <= 31:
             raise ValueError("Days must be between 1 and 31")
         return v
 
     @validator("Weeks", each_item=True)
-    def validate_week(cls, v):
+    def validate_week(cls, v: int) -> int:
+        """Validate week values."""
         if not 1 <= v <= 52:
             raise ValueError("Weeks must be between 1 and 52")
         return v
 
     @validator("Months", each_item=True)
-    def validate_month(cls, v):
+    def validate_month(cls, v: int) -> int:
+        """Validate month values."""
         if not 1 <= v <= 12:
             raise ValueError("Months must be between 1 and 12")
         return v
 
     @validator("Years", each_item=True)
-    def validate_year(cls, v):
+    def validate_year(cls, v: int) -> int:
+        """Validate year values."""
         if v < 1970 or v > 2100:
             raise ValueError("Years must be between 1970 and 2100")
         return v
 
 class NotificationRequest(BaseModel):
+    """Model for notification requests."""
     Application: str
     Recipient: str
     Subject: Optional[str]
@@ -47,7 +54,8 @@ class NotificationRequest(BaseModel):
     PushToken: Optional[str] = None
 
     @root_validator(skip_on_failure=True)
-    def validate_delivery_target(cls, values):
+    def validate_delivery_target(cls, values: dict) -> dict:
+        """Validate that required delivery targets are provided based on output type."""
         output_type = values.get("OutputType")
         phone = values.get("PhoneNumber")
         emails = values.get("EmailAddresses")
