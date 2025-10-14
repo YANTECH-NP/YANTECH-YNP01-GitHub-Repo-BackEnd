@@ -18,7 +18,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_type == 'tag' && 'production' || (github.ref_name == 'staging' && 'staging' || 'dev') }}  
+    # environment: ${{ github.ref_type == 'tag' && 'production' || (github.ref_name == 'staging' && 'staging' || 'dev') }}  
     
     steps:
     - name: Checkout code
