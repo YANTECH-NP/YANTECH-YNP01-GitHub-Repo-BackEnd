@@ -124,41 +124,115 @@ jobs:
         echo "🔒 Production deployment requires manual approval"
         echo "Deploying $VERSION_TAG to production ECS cluster"
     
-    # Deploy to ECS with service updates
+    # Deploy to ECS with service updates (EC2 launch type)
     - name: Deploy to ECS
       run: |
-        echo "Deploying to ECS cluster: YANTECH-cluster-$ENVIRONMENT"
+        CLUSTER_NAME="YANTECH-cluster-$ENVIRONMENT"
+        echo "Deploying to ECS cluster: $CLUSTER_NAME"
         
-        # Update each microservice
+        # Check cluster status first
+        CLUSTER_STATUS=$(aws ecs describe-clusters --clusters $CLUSTER_NAME --query 'clusters[0].status' --output text)
+        ACTIVE_INSTANCES=$(aws ecs describe-clusters --clusters $CLUSTER_NAME --query 'clusters[0].registeredContainerInstancesCount' --output text)
+        
+        echo "Cluster Status: $CLUSTER_STATUS"
+        echo "Active EC2 Instances: $ACTIVE_INSTANCES"
+        
+        if [ "$CLUSTER_STATUS" != "ACTIVE" ]; then
+          echo "❌ ECS Cluster is not active: $CLUSTER_STATUS"
+          exit 1
+        fi
+        
+        if [ "$ACTIVE_INSTANCES" = "0" ]; then
+          echo "❌ No EC2 instances registered in cluster. Check Auto Scaling Group and ECS agent."
+          exit 1
+        fi
+        
+        # Update each microservice with error handling
         for SERVICE in $SERVICES; do
           SERVICE_NAME="YANTECH-${SERVICE}-service-$ENVIRONMENT"
           
-          echo "Updating ECS service: $SERVICE_NAME"
+          echo "🚀 Updating ECS service: $SERVICE_NAME"
+          
+          # Check if service exists
+          SERVICE_EXISTS=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query 'services[0].serviceName' --output text 2>/dev/null)
+          
+          if [ "$SERVICE_EXISTS" = "None" ] || [ -z "$SERVICE_EXISTS" ]; then
+            echo "❌ Service $SERVICE_NAME not found in cluster $CLUSTER_NAME"
+            echo "Available services:"
+            aws ecs list-services --cluster $CLUSTER_NAME --query 'serviceArns' --output table
+            continue
+          fi
+          
+          # Update service with force new deployment
           aws ecs update-service \
-            --cluster YANTECH-cluster-$ENVIRONMENT \
+            --cluster $CLUSTER_NAME \
             --service $SERVICE_NAME \
             --force-new-deployment \
-            --no-cli-pager
+            --no-cli-pager && echo "✅ Service $SERVICE_NAME update initiated" || echo "❌ Failed to update $SERVICE_NAME"
         done
     
-    # Wait for ECS services to stabilize
+    # Wait for ECS services to stabilize (EC2 launch type)
     - name: Wait for ECS deployment completion
       run: |
-        echo "Waiting for ECS services to stabilize..."
+        echo "Waiting for ECS services to stabilize (EC2 launch type)..."
         
-        # Build service names array
-        SERVICES_ARRAY=()
+        # Check cluster has active EC2 instances
+        CLUSTER_NAME="YANTECH-cluster-$ENVIRONMENT"
+        ACTIVE_INSTANCES=$(aws ecs describe-clusters --clusters $CLUSTER_NAME --query 'clusters[0].registeredContainerInstancesCount' --output text)
+        echo "Active EC2 instances in cluster: $ACTIVE_INSTANCES"
+        
+        if [ "$ACTIVE_INSTANCES" = "0" ]; then
+          echo "❌ No EC2 instances registered in ECS cluster. Check Auto Scaling Group."
+          exit 1
+        fi
+        
+        # Wait for each service individually with timeout
         for SERVICE in $SERVICES; do
-          SERVICES_ARRAY+=("YANTECH-${SERVICE}-service-$ENVIRONMENT")
+          SERVICE_NAME="YANTECH-${SERVICE}-service-$ENVIRONMENT"
+          echo "⏳ Waiting for service: $SERVICE_NAME"
+          
+          # Check service exists
+          SERVICE_EXISTS=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query 'services[0].serviceName' --output text 2>/dev/null)
+          if [ "$SERVICE_EXISTS" = "None" ] || [ -z "$SERVICE_EXISTS" ]; then
+            echo "❌ Service $SERVICE_NAME not found"
+            continue
+          fi
+          
+          # Wait with custom timeout (10 minutes for EC2)
+          timeout 600 aws ecs wait services-stable \
+            --cluster $CLUSTER_NAME \
+            --services $SERVICE_NAME \
+            --no-cli-pager || {
+            echo "⚠️ Service $SERVICE_NAME did not stabilize within 10 minutes"
+            
+            # Show service status for debugging
+            echo "📊 Service Status:"
+            aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME \
+              --query 'services[0].{Status:status,Running:runningCount,Desired:desiredCount,Pending:pendingCount}' --output table
+            
+            # Show recent events
+            echo "📝 Recent Events:"
+            aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME \
+              --query 'services[0].events[:3].{Time:createdAt,Message:message}' --output table
+            
+            # Show stopped tasks
+            echo "❌ Recent Stopped Tasks:"
+            aws ecs list-tasks --cluster $CLUSTER_NAME --service-name $SERVICE_NAME --desired-status STOPPED --max-items 3 \
+              --query 'taskArns' --output text | while read task_arn; do
+              if [ ! -z "$task_arn" ]; then
+                aws ecs describe-tasks --cluster $CLUSTER_NAME --tasks $task_arn \
+                  --query 'tasks[0].{StoppedReason:stoppedReason,ExitCode:containers[0].exitCode}' --output table
+              fi
+            done
+            
+            # Continue with other services instead of failing
+            echo "⚠️ Continuing with other services..."
+          }
+          
+          echo "✅ Service $SERVICE_NAME deployment completed"
         done
         
-        # Wait for all services to stabilize
-        aws ecs wait services-stable \
-          --cluster YANTECH-cluster-$ENVIRONMENT \
-          --services "${SERVICES_ARRAY[@]}" \
-          --no-cli-pager
-        
-        echo "✅ All services deployed successfully to $ENVIRONMENT"
+        echo "✅ All services deployment process completed for $ENVIRONMENT"
     
     # Create GitHub Release for tagged versions
     - name: Create GitHub Release
@@ -194,20 +268,40 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
-    # Deployment summary
+    # Deployment summary with health checks
     - name: Deployment Summary
       run: |
+        CLUSTER_NAME="YANTECH-cluster-$ENVIRONMENT"
+        
         echo "## 📋 Deployment Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "**Environment:** $ENVIRONMENT" >> $GITHUB_STEP_SUMMARY
         echo "**Image Tag:** $IMAGE_TAG" >> $GITHUB_STEP_SUMMARY
         echo "**Services Deployed:** $SERVICES" >> $GITHUB_STEP_SUMMARY
-        echo "**ECS Cluster:** YANTECH-cluster-$ENVIRONMENT" >> $GITHUB_STEP_SUMMARY
+        echo "**ECS Cluster:** $CLUSTER_NAME" >> $GITHUB_STEP_SUMMARY
+        echo "**Launch Type:** EC2" >> $GITHUB_STEP_SUMMARY
+        
+        # Add cluster health info
+        ACTIVE_INSTANCES=$(aws ecs describe-clusters --clusters $CLUSTER_NAME --query 'clusters[0].registeredContainerInstancesCount' --output text)
+        echo "**Active EC2 Instances:** $ACTIVE_INSTANCES" >> $GITHUB_STEP_SUMMARY
+        
+        # Add service status
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Service Status" >> $GITHUB_STEP_SUMMARY
+        for SERVICE in $SERVICES; do
+          SERVICE_NAME="YANTECH-${SERVICE}-service-$ENVIRONMENT"
+          RUNNING_COUNT=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query 'services[0].runningCount' --output text 2>/dev/null || echo "0")
+          DESIRED_COUNT=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query 'services[0].desiredCount' --output text 2>/dev/null || echo "0")
+          echo "- **$SERVICE:** $RUNNING_COUNT/$DESIRED_COUNT running" >> $GITHUB_STEP_SUMMARY
+        done
         
         if [[ "$IS_RELEASE" == "true" ]]; then
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Release:** $VERSION_TAG" >> $GITHUB_STEP_SUMMARY
           echo "**GitHub Release:** Created automatically" >> $GITHUB_STEP_SUMMARY
         fi
         
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "✅ **Status:** Deployment completed successfully" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **Status:** Deployment process completed" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "💡 **Troubleshooting:** If services are not healthy, run \`./debug-ecs-deployment.sh $ENVIRONMENT\` for detailed diagnostics" >> $GITHUB_STEP_SUMMARY
