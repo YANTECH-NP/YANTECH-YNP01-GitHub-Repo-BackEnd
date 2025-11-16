@@ -171,68 +171,49 @@ jobs:
             --no-cli-pager && echo "✅ Service $SERVICE_NAME update initiated" || echo "❌ Failed to update $SERVICE_NAME"
         done
     
-    # Wait for ECS services to stabilize (EC2 launch type)
+    # Wait for ECS services to deploy (EC2 launch type) - FAST VERSION
     - name: Wait for ECS deployment completion
       run: |
-        echo "Waiting for ECS services to stabilize (EC2 launch type)..."
+        echo "Waiting for ECS services to deploy (EC2 launch type)..."
         
-        # Check cluster has active EC2 instances
         CLUSTER_NAME="YANTECH-cluster-$ENVIRONMENT"
         ACTIVE_INSTANCES=$(aws ecs describe-clusters --clusters $CLUSTER_NAME --query 'clusters[0].registeredContainerInstancesCount' --output text)
         echo "Active EC2 instances in cluster: $ACTIVE_INSTANCES"
         
         if [ "$ACTIVE_INSTANCES" = "0" ]; then
-          echo "❌ No EC2 instances registered in ECS cluster. Check Auto Scaling Group."
+          echo "❌ No EC2 instances registered in ECS cluster."
           exit 1
         fi
         
-        # Wait for each service individually with timeout
+        # Wait for each service with simple running count check (faster)
         for SERVICE in $SERVICES; do
           SERVICE_NAME="YANTECH-${SERVICE}-service-$ENVIRONMENT"
-          echo "⏳ Waiting for service: $SERVICE_NAME"
+          echo "⏳ Checking service: $SERVICE_NAME"
           
-          # Check service exists
-          SERVICE_EXISTS=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query 'services[0].serviceName' --output text 2>/dev/null)
-          if [ "$SERVICE_EXISTS" = "None" ] || [ -z "$SERVICE_EXISTS" ]; then
-            echo "❌ Service $SERVICE_NAME not found"
-            continue
-          fi
-          
-          # Wait with custom timeout (10 minutes for EC2)
-          timeout 600 aws ecs wait services-stable \
-            --cluster $CLUSTER_NAME \
-            --services $SERVICE_NAME \
-            --no-cli-pager || {
-            echo "⚠️ Service $SERVICE_NAME did not stabilize within 10 minutes"
+          # Simple check: wait for running count = desired count (max 3 minutes)
+          for i in {1..18}; do
+            RUNNING=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query 'services[0].runningCount' --output text 2>/dev/null || echo "0")
+            DESIRED=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --query 'services[0].desiredCount' --output text 2>/dev/null || echo "1")
             
-            # Show service status for debugging
-            echo "📊 Service Status:"
-            aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME \
-              --query 'services[0].{Status:status,Running:runningCount,Desired:desiredCount,Pending:pendingCount}' --output table
+            echo "  Attempt $i: $SERVICE_NAME running $RUNNING/$DESIRED tasks"
             
-            # Show recent events
-            echo "📝 Recent Events:"
-            aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME \
-              --query 'services[0].events[:3].{Time:createdAt,Message:message}' --output table
+            if [ "$RUNNING" = "$DESIRED" ] && [ "$RUNNING" != "0" ]; then
+              echo "✅ Service $SERVICE_NAME is running ($RUNNING/$DESIRED)"
+              break
+            fi
             
-            # Show stopped tasks
-            echo "❌ Recent Stopped Tasks:"
-            aws ecs list-tasks --cluster $CLUSTER_NAME --service-name $SERVICE_NAME --desired-status STOPPED --max-items 3 \
-              --query 'taskArns' --output text | while read task_arn; do
-              if [ ! -z "$task_arn" ]; then
-                aws ecs describe-tasks --cluster $CLUSTER_NAME --tasks $task_arn \
-                  --query 'tasks[0].{StoppedReason:stoppedReason,ExitCode:containers[0].exitCode}' --output table
-              fi
-            done
+            if [ $i -eq 18 ]; then
+              echo "⚠️ Service $SERVICE_NAME did not reach desired state in 3 minutes"
+              # Show status but don't fail
+              aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME \
+                --query 'services[0].{Status:status,Running:runningCount,Desired:desiredCount,Events:events[0].message}' --output table
+            fi
             
-            # Continue with other services instead of failing
-            echo "⚠️ Continuing with other services..."
-          }
-          
-          echo "✅ Service $SERVICE_NAME deployment completed"
+            sleep 10
+          done
         done
         
-        echo "✅ All services deployment process completed for $ENVIRONMENT"
+        echo "✅ All services deployment check completed for $ENVIRONMENT"
     
     # Create GitHub Release for tagged versions
     - name: Create GitHub Release
