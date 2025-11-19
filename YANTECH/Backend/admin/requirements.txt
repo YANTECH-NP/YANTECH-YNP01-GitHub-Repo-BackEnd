@@ -1,6 +1,6 @@
 fastapi
 boto3
-pydantic
+pydantic[email]
 python-dotenv
 uvicorn
 python-multipart
