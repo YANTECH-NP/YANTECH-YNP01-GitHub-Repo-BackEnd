@@ -9,7 +9,7 @@ services:
     environment:
       - AWS_REGION=us-east-1
     ports:
-      - "8001:8001"
+      - "5001:5001"
 
   requestor:
     build:
