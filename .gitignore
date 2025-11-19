@@ -10,3 +10,4 @@ test-sms-notifications.sh
 test-admin-registration.sh
 test-sns-email.sh
 test-sns-sms.sh
+final-ecs-fix.bat
