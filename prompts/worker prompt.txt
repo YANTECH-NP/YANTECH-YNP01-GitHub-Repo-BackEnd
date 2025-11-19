@@ -1,0 +1,26 @@
+I need the worker to poll for messages from the sqs queue(the url will be passed via .env file). The message in the queue could be of the form:
+{
+    "Messages": [
+        {
+            "MessageId": "da5ad88b-2ef4-47a6-9560-93cda9592200",
+            "ReceiptHandle": "M2NhMGI1MDYtYzMwNi00ZWQ3LThiY2UtYjM2YThjZGE4ZDhlIGFybjphd3M6c3FzOnVzLWVhc3QtMTowMDAwMDAwMDAwMDA6bm90aWZpY2F0aW9ucy1xdWV1ZSBkYTVhZDg4Yi0yZWY0LTQ3YTYtOTU2MC05M2NkYTk1OTIyMDAgMTc1Mjg0OTkzMS4zNjAyMDc2",
+            "MD5OfBody": "b86a1e9202e225358e77b8f49de25293",
+            "Body": "{\"Application\": \"App2\", \"Recipient\": \"user@example.com\", \"Subject\": \"Test Subject\", \"Message\": \"Hello, this is a test message!\", \"OutputType\": \"EMAIL\", \"Date\": null, \"Time\": null, \"Interval\": {\"Once\": true, \"Days\": [], \"Weeks\": [], \"Months\": [], \"Years\": []}, \"PhoneNumber\": null, \"EmailAddresses\": [\"user@example.com\"], \"PushToken\": null}"
+        }
+    ]
+}
+The worker node has to poll the queue for handling of the message. once the queue is polled, the worker node will have to read the dynamodb table in order to get the sns topic for either sms or push notifications and the domain for email notificaitons, it will help the worker to know where to push these notifications. The primary key in the dynamodb will be the "Applications" value which can be App1,App2 etc to ease sorting. The worker will be able to choose which of the services to send notifications to based on the values of "outputType" in the message "Body". The output type can either be EMAIL, SMS or PUSH. In case of:
+- email, the worker will send EMAIL via SES, 
+- SMS, the worker will send SMS and 
+- PUSH the worker will send via SNS. 
+
+The topics/domaines for which it will send these notificaitions will be from the dynamodb table "Applications"(that was earlier read). After finishing the handling of each message, the worker should write the status of the treated queue message, be it delivered or failed, with the timestamp for persistence.
+
+I therefore need the python code, give also the json format of the data to be stored in the "Applications" table. Let the files match the project structure of a full flesh python app with requirements.txt, dockerfile, .env etc 
+
+
+
+
+IMPORTANT GIT COMMANDS
+COMMAND TO CLEAR CACHE AND A COMMIT 
+git filter-branch --force --index-filter "git rm --cached --ignore-unmatch README.md" --prune-empty --tag-name-filter cat -- --all
