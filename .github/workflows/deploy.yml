@@ -98,7 +98,7 @@ jobs:
             # Production release: tag with version and latest
             docker build -t $ECR_REGISTRY/$SERVICE-prod:$VERSION_TAG \
                         -t $ECR_REGISTRY/$SERVICE-prod:latest \
-                        ./$SERVICE
+                        ./YANTECH/Backend/$SERVICE
             
             docker push $ECR_REGISTRY/$SERVICE-prod:$VERSION_TAG
             docker push $ECR_REGISTRY/$SERVICE-prod:latest
@@ -108,7 +108,7 @@ jobs:
             # Branch deployment: tag with commit SHA and latest
             docker build -t $ECR_REGISTRY/$SERVICE-$ENVIRONMENT:$IMAGE_TAG \
                         -t $ECR_REGISTRY/$SERVICE-$ENVIRONMENT:latest \
-                        ./$SERVICE
+                        ./YANTECH/Backend/$SERVICE
             
             docker push $ECR_REGISTRY/$SERVICE-$ENVIRONMENT:$IMAGE_TAG
             docker push $ECR_REGISTRY/$SERVICE-$ENVIRONMENT:latest
