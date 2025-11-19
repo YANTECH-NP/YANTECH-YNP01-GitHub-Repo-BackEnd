@@ -11,7 +11,7 @@ class Settings:
     AWS_ACCESS_KEY_ID: Optional[str] = os.getenv("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY: Optional[str] = os.getenv("AWS_SECRET_ACCESS_KEY")
     AWS_ACCOUNT_ID: Optional[str] = os.getenv("AWS_ACCOUNT_ID")
-    APP_CONFIG_TABLE: str = os.getenv("APP_CONFIG_TABLE", "Applications")
+    APP_CONFIG_TABLE: str = os.getenv("APPLICATIONS_TABLE", "Applications")
 
 settings = Settings()
 
