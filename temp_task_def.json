@@ -1,0 +1,93 @@
+{
+    "taskDefinitionArn": "arn:aws:ecs:us-east-1:588082972397:task-definition/YANTECH-admin-dev:50",
+    "containerDefinitions": [
+        {
+            "name": "admin-container",
+            "image": "588082972397.dkr.ecr.us-east-1.amazonaws.com/admin-dev:latest",
+            "cpu": 256,
+            "memory": 512,
+            "portMappings": [
+                {
+                    "containerPort": 8001,
+                    "hostPort": 0,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                {
+                    "name": "APPLICATIONS_TABLE",
+                    "value": "YANTECH-YNP01-AWS-DYNAMODB-APPLICATIONS-DEV"
+                },
+                {
+                    "name": "ALLOWED_ORIGINS",
+                    "value": "https://ynp01-s3-frontend2.s3.amazonaws.com"
+                },
+                {
+                    "name": "APP_HOST",
+                    "value": "0.0.0.0"
+                },
+                {
+                    "name": "AWS_REGION",
+                    "value": "us-east-1"
+                },
+                {
+                    "name": "APP_PORT",
+                    "value": "8001"
+                },
+                {
+                    "name": "API_KEYS_TABLE",
+                    "value": "YANTECH-YNP01-AWS-DYNAMODB-API-KEYS-DEV"
+                }
+            ],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/YANTECH-admin-dev",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            },
+            "systemControls": []
+        }
+    ],
+    "family": "YANTECH-admin-dev",
+    "taskRoleArn": "arn:aws:iam::588082972397:role/YANTECH-AWS-Sec-IAM-Role-Admin-ECS-dev",
+    "executionRoleArn": "arn:aws:iam::588082972397:role/YANTECH-ecs-task-execution-role-dev",
+    "networkMode": "bridge",
+    "revision": 50,
+    "volumes": [],
+    "status": "ACTIVE",
+    "requiresAttributes": [
+        {
+            "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
+        },
+        {
+            "name": "ecs.capability.execution-role-awslogs"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.ecr-auth"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.task-iam-role"
+        },
+        {
+            "name": "ecs.capability.execution-role-ecr-pull"
+        }
+    ],
+    "placementConstraints": [],
+    "compatibilities": [
+        "EXTERNAL",
+        "EC2"
+    ],
+    "requiresCompatibilities": [
+        "EC2"
+    ],
+    "registeredAt": "2025-11-19T16:12:05.993000+01:00",
+    "registeredBy": "arn:aws:iam::588082972397:user/elvis.bemnji-NP"
+}

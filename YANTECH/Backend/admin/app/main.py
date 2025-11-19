@@ -1,6 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, EmailStr
 from fastapi.middleware.cors import CORSMiddleware
+import secrets
+import string
+from datetime import datetime, timezone
 # Removed AWS services import - admin only handles app registration
 from .db import save_app_record, get_all_apps, update_app_record, delete_app_record
 
@@ -102,50 +105,7 @@ def delete_application(app_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/applications/{app_id}/api-key")
-def create_application_api_key(app_id: str, api_key_req: ApiKeyRequest):
-    """Create a new API key for an application"""
-    try:
-        # Generate new API key
-        alphabet = string.ascii_letters + string.digits + "_-"
-        api_key = ''.join(secrets.choice(alphabet) for _ in range(32))
-        
-        api_key_record = {
-            "application_id": app_id,
-            "api_key": api_key,
-            "name": api_key_req.name or f"API Key for {app_id}",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "expires_at": api_key_req.expires_at,
-            "is_active": True
-        }
-        
-        key_id = create_api_key(api_key_record)
-        
-        return {
-            "id": key_id,
-            "api_key": api_key,
-            "name": api_key_record["name"],
-            "created_at": api_key_record["created_at"],
-            "expires_at": api_key_record["expires_at"]
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/applications/{app_id}/api-keys")
-def get_application_api_keys(app_id: str):
-    """Get all API keys for an application"""
-    try:
-        return get_app_api_keys(app_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/applications/{app_id}/notifications")
-def get_application_notifications(app_id: str):
-    """Get notification history for an application"""
-    try:
-        return get_app_notifications(app_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# API key management endpoints removed - not implemented yet
 
 
 

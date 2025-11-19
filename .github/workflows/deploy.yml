@@ -124,6 +124,37 @@ jobs:
         echo "🔒 Production deployment requires manual approval"
         echo "Deploying $VERSION_TAG to production ECS cluster"
     
+    # Update task definitions with new images
+    - name: Update ECS Task Definitions
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+      run: |
+        CLUSTER_NAME="YANTECH-cluster-$ENVIRONMENT"
+        echo "Updating task definitions with new images..."
+        
+        for SERVICE in $SERVICES; do
+          TASK_FAMILY="YANTECH-${SERVICE}-$ENVIRONMENT"
+          
+          if [[ "$IS_RELEASE" == "true" ]]; then
+            NEW_IMAGE="$ECR_REGISTRY/$SERVICE-prod:$VERSION_TAG"
+          else
+            NEW_IMAGE="$ECR_REGISTRY/$SERVICE-$ENVIRONMENT:$IMAGE_TAG"
+          fi
+          
+          echo "📝 Updating $TASK_FAMILY with image: $NEW_IMAGE"
+          
+          # Get current task definition
+          TASK_DEF=$(aws ecs describe-task-definition --task-definition $TASK_FAMILY --query 'taskDefinition')
+          
+          # Update image in task definition
+          NEW_TASK_DEF=$(echo $TASK_DEF | jq --arg IMAGE "$NEW_IMAGE" '.containerDefinitions[0].image = $IMAGE | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)')
+          
+          # Register new task definition
+          aws ecs register-task-definition --cli-input-json "$NEW_TASK_DEF" --no-cli-pager
+          
+          echo "✅ Updated task definition: $TASK_FAMILY"
+        done
+    
     # Deploy to ECS with service updates (EC2 launch type)
     - name: Deploy to ECS
       run: |
@@ -147,9 +178,10 @@ jobs:
           exit 1
         fi
         
-        # Update each microservice with error handling
+        # Update each microservice with new task definition
         for SERVICE in $SERVICES; do
           SERVICE_NAME="YANTECH-${SERVICE}-service-$ENVIRONMENT"
+          TASK_FAMILY="YANTECH-${SERVICE}-$ENVIRONMENT"
           
           echo "🚀 Updating ECS service: $SERVICE_NAME"
           
@@ -163,10 +195,11 @@ jobs:
             continue
           fi
           
-          # Update service with force new deployment
+          # Update service with new task definition
           aws ecs update-service \
             --cluster $CLUSTER_NAME \
             --service $SERVICE_NAME \
+            --task-definition $TASK_FAMILY \
             --force-new-deployment \
             --no-cli-pager && echo "✅ Service $SERVICE_NAME update initiated" || echo "❌ Failed to update $SERVICE_NAME"
         done
